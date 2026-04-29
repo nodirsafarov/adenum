@@ -7,7 +7,8 @@ from ..modules import dns_recon, policy, userenum
 from ..state import Findings
 
 
-async def run(findings: Findings, *, users_path: Path | None = None) -> Path | None:
+async def run(findings: Findings, *, users_path: Path | None = None,
+              wordlist: Path | None = None) -> Path | None:
     ui.banner(1, findings.target.ip,
               {"domain": findings.target.domain or "?",
                "goal": "users / groups / computers / pwpolicy"})
@@ -18,7 +19,7 @@ async def run(findings: Findings, *, users_path: Path | None = None) -> Path | N
 
     await dns_recon.run_dns(findings)
     await policy.run_policy(findings)
-    written = await userenum.run_userenum(findings)
+    written = await userenum.run_userenum(findings, wordlist=wordlist)
 
     print_summary(findings)
     suggest_next(findings, users_path or written)

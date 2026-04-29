@@ -314,6 +314,55 @@ async def find_asrep_roastable(findings: Findings, user: str | None = None,
             ui.crit(f"AS-REP roastable: {name}")
 
 
+_PASSWORD_HINTS = re.compile(
+    r"(?i)(pass(?:word)?|pwd|cred|secret|token|key|api[_-]?key)\s*[:=]\s*([^\s,;]+)"
+)
+
+
+async def hunt_description_passwords(findings: Findings, user: str | None = None,
+                                    password: str | None = None) -> None:
+    if not runner.has("ldapsearch") or not findings.target.domain_dn:
+        return
+    ui.section("description field password hunt")
+    ui.explain(
+        "Admins regularly stash passwords in user 'description' fields. "
+        "Standard sysadmin antipattern. We pull every description and grep "
+        "for password-like patterns. Anonymous bind or cheap creds are enough."
+    )
+    cmd = _ldap_cmd(
+        findings, findings.target.domain_dn,
+        "(&(objectCategory=person)(objectClass=user)(description=*))",
+        ["sAMAccountName", "description"], user, password,
+    )
+    ui.cmd(cmd[:6] + ["[...]"])
+    result = await runner.run(cmd, timeout=60)
+    current_user: str | None = None
+    description_count = 0
+    rows: list[tuple[str, str, str]] = []
+    for raw in result.stdout.splitlines():
+        if raw.lower().startswith("samaccountname:"):
+            current_user = raw.split(":", 1)[1].strip()
+        elif raw.lower().startswith("description:") and current_user:
+            description = raw.split(":", 1)[1].strip()
+            description_count += 1
+            for match in _PASSWORD_HINTS.finditer(description):
+                keyword, value = match.group(1), match.group(2)
+                rows.append((current_user, keyword, value))
+                from .. import creds_store
+                creds_store.add_password(findings, current_user, value)
+                findings.vulns.append(
+                    f"[HIGH] description-field password: {current_user} -> {value}"
+                )
+            current_user = None
+    if rows:
+        ui.table("[red]passwords in description field[/red]",
+                 ["user", "hint", "value"], rows[:30])
+    else:
+        ui.explain(
+            f"scanned {description_count} description fields - no obvious passwords."
+        )
+
+
 async def find_kerberoastable(findings: Findings, user: str | None = None,
                              password: str | None = None) -> None:
     if not runner.has("ldapsearch") or not findings.target.domain_dn:
@@ -350,6 +399,7 @@ async def run_advanced(
             enum_admin_sd_holder(findings, user, password),
             find_asrep_roastable(findings, user, password),
             find_kerberoastable(findings, user, password),
+            hunt_description_passwords(findings, user, password),
         )
         await enum_pre2k(findings, user, password)
         await enum_laps(findings, user, password, ntlm_hash)
@@ -362,4 +412,5 @@ async def run_advanced(
             enum_admin_sd_holder(findings),
             find_asrep_roastable(findings),
             find_kerberoastable(findings),
+            hunt_description_passwords(findings),
         )

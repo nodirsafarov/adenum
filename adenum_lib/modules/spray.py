@@ -81,8 +81,10 @@ async def spray_smb(
         for user, pw in new_creds:
             if (user, pw) not in found:
                 found.append((user, pw))
-                findings.cleartext_creds.append((user, pw))
+                from .. import creds_store, oneliner
+                creds_store.add_password(findings, user, pw)
                 ui.crit(f"VALID: {user}:{pw}")
+                oneliner.emit_for_credential(findings, user, password=pw)
         if found and not continue_on_success:
             break
 
@@ -130,8 +132,10 @@ async def spray_kerberos(
             result = await runner.run(cmd, timeout=15)
             if result.ok and ".ccache" in result.combined:
                 found.append((user, password))
-                findings.cleartext_creds.append((user, password))
+                from .. import creds_store, oneliner
+                creds_store.add_password(findings, user, password)
                 ui.crit(f"VALID (Kerberos): {user}:{password}")
+                oneliner.emit_for_credential(findings, user, password=password)
 
     tasks = [attempt(user, password) for password in passwords for user in users]
     await asyncio.gather(*tasks)

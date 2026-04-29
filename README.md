@@ -75,14 +75,31 @@ Every stage **auto-suggests the next command** with the exact arguments you need
 - **Shodan** API search (optional, requires `SHODAN_API_KEY`)
 - **GitHub** code search for credential leaks (optional, via `gh` CLI)
 
+### Quick wins (always-on detectors)
+- **AS-REP roastable accounts** — flagged + hashes captured in one pass (native kerbrute)
+- **Description-field passwords** — LDAP grep for `password=`, `pwd:`, `secret=` patterns in user `description` attribute (a *very* common antipattern)
+- **Anonymous SMB / LDAP / RPC** — detected and exploited in stage 0
+- **Pre-Win2k computers** — automatically tries `name:lower(name)` login
+
+### Credential vault
+- Every credential captured (cleartext, NT hash, AS-REP, Kerberoast, ticket) is appended to **`loot/<ip>/creds.txt`** in unified format: `<type>:<user>:<credential>`
+- Ready to feed straight into `nxc -u creds.txt`, `evil-winrm`, or hashcat
+- Deduplicated; never lost across runs
+
+### Ready-to-run command generator
+- Every successful credential capture **prints copy-paste commands** for: `nxc smb`, `evil-winrm`, `impacket-mssqlclient`, `psexec`, `wmiexec`, `secretsdump`, `bloodhound-python`, `certipy-ad`, and the full `adenum` stage-3 follow-up
+- AS-REP/Kerberoast hashes get inline `hashcat`/`john` invocations with the right `-m` mode
+
 ### Operational features
 - **Native Python kerbrute** — no Go binary needed; bonus: extracts AS-REP hashes during user enum
+- **External username wordlist** — `-w names.txt` (e.g. SecLists's `Usernames/Names/names.txt`) when anonymous LDAP enum is closed
 - **Lockout-aware password spray** — reads password policy first, refuses to lock accounts
 - **OPSEC profiles** — `--opsec quiet|normal|loud` tunes concurrency and nmap timing
 - **State persistence** — `--save-state state.json` + `--resume state.json` for long campaigns
 - **Multi-target** — single IP, CIDR (`10.0.0.0/24`), or `-T targets.txt`
 - **Three output formats** — rich terminal, standalone HTML with Chart.js, strict JSON
 - **Educational verbose mode** — `-v` explains *why* each tool is being run
+- **Parallel by default** — `asyncio` + thread pool means port scan + SMB info + LDAP rootDSE + RPC null session run in parallel (~5x speedup)
 
 ---
 
@@ -184,9 +201,11 @@ Discovers domain, hostname, OS, SMB signing, anonymous shares, NetBIOS, time ske
 
 ```bash
 adenum 10.10.10.5 -d htb.local -v
+# with external wordlist (when anonymous LDAP is closed):
+adenum 10.10.10.5 -d htb.local -w /usr/share/seclists/Usernames/Names/names.txt -v
 ```
 
-Enumerates users (RID brute + AS-REQ kerbrute against built-in 80+ common AD names), groups, password policy, and AD SRV records. Saves harvested usernames to `loot/<ip>/users.txt`.
+Enumerates users (RID brute + AS-REQ kerbrute against built-in 80+ common AD names + your `-w` wordlist), groups, password policy, and AD SRV records. Saves harvested usernames to `loot/<ip>/users.txt`.
 
 ### Stage 2 — with a user list
 
@@ -285,14 +304,36 @@ Strict structured dump of everything in `Findings`. Useful for piping into other
 
 ```
 loot/<target_ip>/
+├── creds.txt                  # unified credential vault (all types in one file)
 ├── users.txt                  # harvested usernames
 ├── asrep_hashes.txt           # AS-REP roast (hashcat -m 18200)
 ├── kerberoast_hashes.txt      # Kerberoast (hashcat -m 13100)
 ├── spray_creds.txt            # cleartext from spray
 ├── secretsdump.txt            # SAM/LSA/NTDS dump
+├── subdomains_crtsh.txt       # passive crt.sh harvest
 ├── bloodhound/                # BloodHound JSON + ZIP
 ├── adcs/                      # certipy output
 └── sysvol/                    # downloaded GPP XMLs
+```
+
+### `creds.txt` format
+
+```
+# adenum credential vault - one line per credential
+# Format: <type>:<user>:<credential>[:<extra>]
+password:administrator:Welcome2024!
+password:helpdesk:Helpdesk@2024
+nthash:svc_sql:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0
+asrep:guest:$krb5asrep$23$guest@HTB.LOCAL:abc...$def...
+kerb:svc_iis:$krb5tgs$23$*svc_iis$HTB.LOCAL$http/iis.htb.local*$abc...
+```
+
+Pipe straight into your follow-up tooling:
+
+```bash
+# Replay every harvested cred via nxc
+awk -F: '/^password:/ {print $2":"$3}' loot/10.10.10.5/creds.txt \
+  | xargs -n1 -I{} sh -c 'echo {} | nxc smb 10.10.10.5 -u $(echo {} | cut -d: -f1) -p $(echo {} | cut -d: -f2-)'
 ```
 
 ---
@@ -442,6 +483,10 @@ This is the kind of tool that ends up in CTF write-ups and home-lab tutorials. K
 - [x] MSSQL / WinRM / multi-method exec
 - [x] Active NoPac (`--exploit`)
 - [x] `pipx install` installable
+- [x] Unified credential vault (`creds.txt`)
+- [x] Description-field password hunting
+- [x] Ready-to-run command generator (one-liner emit)
+- [x] External username wordlist (`-w names.txt`)
 - [ ] Active ZeroLogon / PetitPotam destructive paths
 - [ ] BloodHound CE post-collection Cypher queries
 - [ ] ntlmrelayx orchestration with attacker-side listener

@@ -60,6 +60,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     auth = parser.add_argument_group("AD context (stage trigger)")
     auth.add_argument("-d", "--domain", help="AD domain (htb.local)")
     auth.add_argument("--users", type=Path, help="user list file (stage 2)")
+    auth.add_argument("-w", "--wordlist", type=Path,
+                      help="external username wordlist for kerbrute (e.g. names.txt)")
     auth.add_argument("-u", "--user", help="username for stage 3 / aggressive")
     auth.add_argument("-p", "--password", help="cleartext password")
     auth.add_argument("-H", "--hash", dest="ntlm_hash", help="NTLM hash (LM:NT or NT)")
@@ -173,7 +175,9 @@ async def run_one(ip: str, args: argparse.Namespace) -> Findings:
         if args.domain or findings.target.domain:
             if args.domain and not findings.target.domain:
                 findings.target.domain = args.domain
-            await stage1.run(findings, users_path=args.users)
+            await stage1.run(
+                findings, users_path=args.users, wordlist=args.wordlist,
+            )
             _checkpoint("stage1")
         if args.users:
             await stage2.run(findings, users_path=args.users)

@@ -58,6 +58,8 @@ async def run(
         )
 
     print_summary(findings)
+    from .. import creds_store
+    creds_store.summary(findings)
 
 
 def print_summary(findings: Findings) -> None:

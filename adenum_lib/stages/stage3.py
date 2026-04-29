@@ -37,6 +37,14 @@ async def run(findings: Findings, *, user: str,
 
     print_summary(findings)
 
+    from .. import creds_store, oneliner
+    creds_store.summary(findings)
+    if findings.nt_hashes:
+        first_user, first_hash = findings.nt_hashes[0]
+        oneliner.emit_for_credential(
+            findings, first_user, nt_hash=f"aad3b435b51404eeaad3b435b51404ee:{first_hash}",
+        )
+
 
 def print_summary(findings: Findings) -> None:
     ui.section("stage 3 findings")

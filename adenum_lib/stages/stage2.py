@@ -69,6 +69,10 @@ async def run(findings: Findings, *, users_path: Path) -> None:
         ui.warn(f"clock skew detected. Run: sudo rdate -n {findings.target.ip}")
 
     if new_hashes:
+        from .. import creds_store, oneliner
+        for hash_value in new_hashes:
+            user_part = hash_value.split("$")[3].split("@")[0] if "$" in hash_value else "?"
+            creds_store.add_asrep_hash(findings, user_part, hash_value)
         out = loot_dir(findings.target.ip) / "asrep_hashes.txt"
         if out.exists():
             existing = out.read_text().splitlines()
@@ -77,10 +81,7 @@ async def run(findings: Findings, *, users_path: Path) -> None:
             combined = sorted(new_hashes)
         out.write_text("\n".join(combined) + "\n")
         ui.good(f"saved {len(new_hashes)} hash(es) -> {out}")
-        ui.next_step(
-            f"hashcat -m 18200 {out} /usr/share/wordlists/rockyou.txt",
-            "RC4 etype = mode 18200; AES128 = 19600; AES256 = 19700",
-        )
+        oneliner.emit_for_asrep(findings, len(new_hashes))
 
     await _verify_with_impacket(findings, users_path)
 
