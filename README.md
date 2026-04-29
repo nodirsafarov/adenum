@@ -28,10 +28,10 @@ Pentesting an Active Directory environment usually means juggling **a dozen tool
 
 | You have… | Run | You get |
 |---|---|---|
-| Just a DC IP | `adenum.py 10.10.10.5` | domain, hostname, OS, shares, time skew |
-| + a domain | `adenum.py … -d htb.local` | users, groups, password policy, SRV records |
-| + a userlist | `adenum.py … --users users.txt` | AS-REP roast hashes (hashcat 18200) |
-| + valid creds | `adenum.py … -u admin -p Pass!` | BloodHound ZIP, NTDS.dit, ADCS findings |
+| Just a DC IP | `adenum 10.10.10.5` | domain, hostname, OS, shares, time skew |
+| + a domain | `adenum … -d htb.local` | users, groups, password policy, SRV records |
+| + a userlist | `adenum … --users users.txt` | AS-REP roast hashes (hashcat 18200) |
+| + valid creds | `adenum … -u admin -p Pass!` | BloodHound ZIP, NTDS.dit, ADCS findings |
 
 Every stage **auto-suggests the next command** with the exact arguments you need.
 
@@ -114,30 +114,58 @@ pipx install bloodhound
 pipx install certipy-ad
 ```
 
-### Get adenum
+### Install (one command, recommended)
+
+```bash
+pipx install git+https://github.com/nodirsafarov/adenum
+```
+
+This puts `adenum` on your `$PATH`. From anywhere:
+
+```bash
+adenum --check-tools 1.1.1.1
+adenum 10.10.10.5
+adenum 10.10.10.5 -d htb.local --aggressive --html report.html
+```
+
+### Or clone + install locally
+
+```bash
+git clone https://github.com/nodirsafarov/adenum
+cd adenum
+pipx install .
+```
+
+### Or run from source (no install)
 
 ```bash
 git clone https://github.com/nodirsafarov/adenum
 cd adenum
 pip install -r requirements.txt
-chmod +x adenum.py
+./adenum.py --check-tools 1.1.1.1
 ```
 
-### Verify your environment
+### Verify
 
 ```bash
-./adenum.py --check-tools 1.1.1.1
+adenum --check-tools 1.1.1.1
 ```
 
 You should see something like:
 
 ```
-[*] tool detection (26/27 available)
+[*] tool detection (31/32 available)
 [+] GetADComputers         -> /usr/bin/impacket-GetADComputers
 [+] GetNPUsers             -> /usr/bin/impacket-GetNPUsers
 [+] bloodhound-python      -> /usr/bin/bloodhound-python
 [+] certipy                -> /usr/bin/certipy-ad
 ...
+```
+
+### Uninstall
+
+```bash
+pipx uninstall adenum
 ```
 
 ---
@@ -147,7 +175,7 @@ You should see something like:
 ### Stage 0 — bare IP
 
 ```bash
-./adenum.py 10.10.10.5 -v
+adenum 10.10.10.5 -v
 ```
 
 Discovers domain, hostname, OS, SMB signing, anonymous shares, NetBIOS, time skew. Auto-suggests the next command if a domain is found.
@@ -155,7 +183,7 @@ Discovers domain, hostname, OS, SMB signing, anonymous shares, NetBIOS, time ske
 ### Stage 1 — with domain
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local -v
+adenum 10.10.10.5 -d htb.local -v
 ```
 
 Enumerates users (RID brute + AS-REQ kerbrute against built-in 80+ common AD names), groups, password policy, and AD SRV records. Saves harvested usernames to `loot/<ip>/users.txt`.
@@ -163,7 +191,7 @@ Enumerates users (RID brute + AS-REQ kerbrute against built-in 80+ common AD nam
 ### Stage 2 — with a user list
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local --users loot/10.10.10.5/users.txt -v
+adenum 10.10.10.5 -d htb.local --users loot/10.10.10.5/users.txt -v
 ```
 
 Sends AS-REQs for every user. Captures AS-REP hashes from accounts that don't require preauth. Saves them in hashcat-ready format to `loot/<ip>/asrep_hashes.txt`.
@@ -175,9 +203,9 @@ hashcat -m 18200 loot/10.10.10.5/asrep_hashes.txt /usr/share/wordlists/rockyou.t
 ### Stage 3 — with credentials
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local -u admin -p 'Password1!' -v
+adenum 10.10.10.5 -d htb.local -u admin -p 'Password1!' -v
 # or with NTLM hash:
-./adenum.py 10.10.10.5 -d htb.local -u admin -H aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0 -v
+adenum 10.10.10.5 -d htb.local -u admin -H aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0 -v
 ```
 
 Runs nxc full enum, Kerberoasts every SPN-bearing account, collects BloodHound, attempts secretsdump (DCSync if you're DA), and runs `certipy-ad find` for ADCS issues.
@@ -185,7 +213,7 @@ Runs nxc full enum, Kerberoasts every SPN-bearing account, collects BloodHound, 
 ### Aggressive — run everything (read-only)
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local --aggressive --html report.html
+adenum 10.10.10.5 -d htb.local --aggressive --html report.html
 ```
 
 Runs all stages above **plus** all vulnerability checks (NoPac, ZeroLogon, PrintNightmare, PetitPotam, PrinterBug), advanced LDAP queries (delegation, LAPS, gMSA, GPP, pre2k, AdminSDHolder), and writes a standalone HTML report.
@@ -193,7 +221,7 @@ Runs all stages above **plus** all vulnerability checks (NoPac, ZeroLogon, Print
 ### Passive — OSINT without touching the target
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local --passive
+adenum 10.10.10.5 -d htb.local --passive
 ```
 
 Pulls DNS records, queries crt.sh for certificate transparency, optionally Shodan and GitHub. **No packets are sent to the target IP.**
@@ -201,8 +229,8 @@ Pulls DNS records, queries crt.sh for certificate transparency, optionally Shoda
 ### Multi-target — sweep a subnet
 
 ```bash
-./adenum.py 10.0.0.0/24
-./adenum.py -T targets.txt
+adenum 10.0.0.0/24
+adenum -T targets.txt
 ```
 
 Each target gets its own `loot/<ip>/` directory.
@@ -210,9 +238,9 @@ Each target gets its own `loot/<ip>/` directory.
 ### State persistence — resume long campaigns
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local --aggressive --save-state campaign.json
+adenum 10.10.10.5 -d htb.local --aggressive --save-state campaign.json
 # (interrupted)
-./adenum.py 10.10.10.5 -d htb.local --aggressive --resume campaign.json
+adenum 10.10.10.5 -d htb.local --aggressive --resume campaign.json
 ```
 
 A checkpoint is written after every stage, so you never have to redo work.
@@ -220,9 +248,9 @@ A checkpoint is written after every stage, so you never have to redo work.
 ### OPSEC profiles
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local --opsec quiet      # IDS-aware, slow
-./adenum.py 10.10.10.5 -d htb.local --opsec normal     # default
-./adenum.py 10.10.10.5 -d htb.local --opsec loud       # maximum speed (lab only)
+adenum 10.10.10.5 -d htb.local --opsec quiet      # IDS-aware, slow
+adenum 10.10.10.5 -d htb.local --opsec normal     # default
+adenum 10.10.10.5 -d htb.local --opsec loud       # maximum speed (lab only)
 ```
 
 | Profile | Concurrency | Kerbrute pool | nmap timing |
@@ -272,35 +300,40 @@ loot/<target_ip>/
 ## Architecture
 
 ```
-adenum.py                                  # CLI entry point
-└── adenum_lib/
-    ├── runner.py            # async subprocess + OPSEC profiles
-    ├── ui.py                # rich-based educational verbose console
-    ├── state.py             # Findings dataclass + save/load
-    ├── parsers.py           # output parsers (LDAP, nxc, lookupsid, nmap, ASREP)
-    ├── reporters.py         # HTML (Chart.js) + JSON serializers
-    ├── wordlists.py         # built-in common AD usernames + passwords
-    ├── modules/
-    │   ├── recon.py         # nmap, reverse DNS, LDAP rootDSE, time skew
-    │   ├── smb.py           # nxc smb info, smbclient -L
-    │   ├── ldap.py          # rootDSE, anonymous user query
-    │   ├── rpc.py           # null session, lookupsid RID brute
-    │   ├── dns_recon.py     # AD SRV, AXFR
-    │   ├── policy.py        # password policy
-    │   ├── kerbrute.py      # native Python AS-REQ probe + AS-REP hash
-    │   ├── userenum.py      # RID brute, kerbrute, anon LDAP
-    │   ├── authenticated.py # nxc full, Kerberoast, BloodHound, secretsdump, certipy
-    │   ├── spray.py         # lockout-aware password spray
-    │   ├── exploits.py      # NoPac/ZeroLogon/PrintNightmare/PetitPotam/PrinterBug checks
-    │   ├── advanced.py      # delegation, LAPS, gMSA, GPP, pre2k, shadow creds
-    │   └── passive.py       # DNS, crt.sh, Shodan, GitHub
-    └── stages/
-        ├── stage0.py        # IP only
-        ├── stage1.py        # +domain
-        ├── stage2.py        # +userlist
-        ├── stage3.py        # +creds
-        ├── stage_passive.py
-        └── stage_aggressive.py
+pyproject.toml                       # pipx-installable, console script: adenum
+adenum.py                            # source-mode launcher (./adenum.py)
+adenum_lib/
+├── cli.py                  # argparse + dispatch (entry point: adenum_lib.cli:main)
+├── runner.py               # async subprocess + OPSEC profiles
+├── ui.py                   # rich-based educational verbose console
+├── state.py                # Findings dataclass + save/load
+├── parsers.py              # output parsers (LDAP, nxc, lookupsid, nmap, ASREP)
+├── reporters.py            # HTML (Chart.js) + JSON serializers
+├── wordlists.py            # built-in common AD usernames + passwords
+├── modules/
+│   ├── recon.py            # nmap, reverse DNS, LDAP rootDSE, time skew
+│   ├── smb.py              # nxc smb info, smbclient -L
+│   ├── ldap.py             # rootDSE, anonymous user query
+│   ├── rpc.py              # null session, lookupsid RID brute
+│   ├── dns_recon.py        # AD SRV, AXFR
+│   ├── policy.py           # password policy
+│   ├── kerbrute.py         # native Python AS-REQ probe + AS-REP hash
+│   ├── userenum.py         # RID brute, kerbrute, anon LDAP
+│   ├── authenticated.py    # nxc full, Kerberoast, BloodHound, secretsdump, certipy
+│   ├── spray.py            # lockout-aware password spray
+│   ├── exploits.py         # NoPac/ZeroLogon/PrintNightmare/PetitPotam/PrinterBug
+│   ├── advanced.py         # delegation, LAPS, gMSA, GPP, pre2k, shadow creds
+│   ├── mssql.py            # MSSQL discovery + auth + sysadmin checks
+│   ├── winrm.py            # PSRemoting accessibility
+│   ├── exec.py             # multi-method execution (5 RPC paths in parallel)
+│   └── passive.py          # DNS, crt.sh, Shodan, GitHub
+└── stages/
+    ├── stage0.py           # IP only
+    ├── stage1.py           # +domain
+    ├── stage2.py           # +userlist
+    ├── stage3.py           # +creds
+    ├── stage_passive.py
+    └── stage_aggressive.py
 ```
 
 ---
@@ -352,17 +385,17 @@ One pool, one userlist, both signals.
 
 ```bash
 # 1. fingerprint
-./adenum.py 10.10.10.161 -v
+adenum 10.10.10.161 -v
 
 # 2. enum with discovered domain
-./adenum.py 10.10.10.161 -d htb.local -v
+adenum 10.10.10.161 -d htb.local -v
 
 # 3. AS-REP roast harvested users
-./adenum.py 10.10.10.161 -d htb.local --users loot/10.10.10.161/users.txt -v
+adenum 10.10.10.161 -d htb.local --users loot/10.10.10.161/users.txt -v
 hashcat -m 18200 loot/10.10.10.161/asrep_hashes.txt /usr/share/wordlists/rockyou.txt
 
 # 4. cracked? full authenticated sweep
-./adenum.py 10.10.10.161 -d htb.local -u svc-alfresco -p s3rvice --aggressive --html report.html
+adenum 10.10.10.161 -d htb.local -u svc-alfresco -p s3rvice --aggressive --html report.html
 
 # 5. import bloodhound ZIP into BloodHound GUI
 ls loot/10.10.10.161/bloodhound/*.zip
@@ -371,7 +404,7 @@ ls loot/10.10.10.161/bloodhound/*.zip
 ### Password spraying (lockout-aware)
 
 ```bash
-./adenum.py 10.10.10.5 -d htb.local \
+adenum 10.10.10.5 -d htb.local \
     --users loot/10.10.10.5/users.txt \
     --spray-pass 'Welcome2024!' \
     --aggressive
@@ -382,7 +415,7 @@ ls loot/10.10.10.161/bloodhound/*.zip
 ### Stealthy passive recon for a known domain
 
 ```bash
-SHODAN_API_KEY=xxx ./adenum.py 1.2.3.4 -d corp.example --passive --html osint.html
+SHODAN_API_KEY=xxx adenum 1.2.3.4 -d corp.example --passive --html osint.html
 ```
 
 Subdomains via crt.sh, exposed services via Shodan, leaked references on GitHub — all without sending a packet to `1.2.3.4`.
@@ -401,13 +434,20 @@ This is the kind of tool that ends up in CTF write-ups and home-lab tutorials. K
 
 ## Roadmap
 
-- [ ] Active destructive exploit chains (`--exploit` currently flags-only)
+- [x] Native AS-REQ kerbrute with hash extraction
+- [x] HTML reports with Chart.js
+- [x] State persistence + resume
+- [x] Multi-target (CIDR + file)
+- [x] OPSEC profiles
+- [x] MSSQL / WinRM / multi-method exec
+- [x] Active NoPac (`--exploit`)
+- [x] `pipx install` installable
+- [ ] Active ZeroLogon / PetitPotam destructive paths
 - [ ] BloodHound CE post-collection Cypher queries
 - [ ] ntlmrelayx orchestration with attacker-side listener
 - [ ] Pluggable module system (`entry_points`)
 - [ ] pytest suite with mocked subprocesses
 - [ ] Docker image
-- [ ] `pipx install adenum`
 
 PRs and issues are welcome.
 
