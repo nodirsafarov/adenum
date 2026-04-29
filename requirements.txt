@@ -1,0 +1,5 @@
+# Core deps for adenum.py - AD universal enumeration tool
+rich>=13.7.0
+ldap3>=2.9.1
+dnspython>=2.4.0
+impacket>=0.12.0

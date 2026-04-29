@@ -1,0 +1,7 @@
+{
+  "include": ["adenum.py", "adenum_lib"],
+  "extraPaths": ["."],
+  "pythonVersion": "3.11",
+  "reportMissingImports": "none",
+  "reportAttributeAccessIssue": "none"
+}

@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adenum"
+version = "0.1.0"
+description = "Universal Active Directory enumeration tool with progressive recon stages, AS-REP roasting, MSSQL/WinRM/coercion checks, and HTML reports"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Nodir Safarov", email = "nodirsafarov32@gmail.com" }
+]
+keywords = [
+    "active-directory", "pentesting", "kerberos", "ldap",
+    "enumeration", "recon", "red-team", "security", "as-rep-roast",
+    "kerberoast", "bloodhound", "impacket", "netexec",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "rich>=13.7.0",
+    "ldap3>=2.9.1",
+    "dnspython>=2.4.0",
+    "impacket>=0.12.0",
+]
+
+[project.scripts]
+adenum = "adenum_lib.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/nodirsafarov/adenum"
+Repository = "https://github.com/nodirsafarov/adenum"
+Issues = "https://github.com/nodirsafarov/adenum/issues"
+Documentation = "https://github.com/nodirsafarov/adenum#readme"
+
+[tool.setuptools.packages.find]
+include = ["adenum_lib*"]
+exclude = ["loot*", "tests*"]
