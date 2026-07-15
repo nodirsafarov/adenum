@@ -18,7 +18,7 @@ def _safe_attempts(password_policy: dict[str, str]) -> int:
     return 3
 
 
-async def _read_lines(path: Path) -> list[str]:
+async def read_lines(path: Path) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for raw in path.read_text(errors="replace").splitlines():
@@ -151,14 +151,14 @@ async def run_spray(
         return
 
     if users_path:
-        users = await _read_lines(users_path)
+        users = await read_lines(users_path)
     else:
         users = sorted(findings.users)
 
     if single_password:
         passwords = [single_password]
     elif passwords_path:
-        passwords = await _read_lines(passwords_path)
+        passwords = await read_lines(passwords_path)
     else:
         from ..wordlists import COMMON_PASSWORDS
         passwords = COMMON_PASSWORDS

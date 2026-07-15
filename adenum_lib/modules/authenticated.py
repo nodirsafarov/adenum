@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from pathlib import Path
 
 from .. import runner, ui
 from ..parsers import extract_kerberoast_hashes
@@ -221,7 +219,6 @@ async def certipy_adcs(findings: Findings, user: str,
     )
     out_dir = loot_dir(findings.target.ip) / "adcs"
     out_dir.mkdir(exist_ok=True)
-    auth = f"{findings.target.domain or '.'}/{user}"
     cmd = [
         runner.resolve("certipy") or "certipy-ad", "find",
         "-u", f"{user}@{findings.target.domain}" if findings.target.domain else user,

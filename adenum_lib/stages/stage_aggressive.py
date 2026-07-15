@@ -51,6 +51,13 @@ async def run(
             passwords_path=spray_list,
             single_password=spray_password,
         )
+        if 1433 in findings.target.open_ports:
+            spray_users = await spray.read_lines(users_path) if users_path else sorted(findings.users)
+            spray_passwords = [spray_password] if spray_password else (
+                await spray.read_lines(spray_list) if spray_list else []
+            )
+            if spray_users and spray_passwords:
+                await mssql.mssql_spray(findings, spray_users, spray_passwords)
 
     if enable_destructive and user and (password or ntlm_hash):
         await exploits.run_destructive_exploits(

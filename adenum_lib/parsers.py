@@ -30,12 +30,12 @@ def parse_nxc_smb_header(text: str) -> dict | None:
 
 
 _RID_LINE = re.compile(
-    r"S-1-5-21-[\d-]+-(?P<rid>\d+)\s+(?P<domain>[^\\]+)\\(?P<name>\S+)\s+\((?P<type>[^)]+)\)"
+    r"^(?P<rid>\d+):\s+(?P<domain>[^\\]+)\\(?P<name>.+?)\s+\((?P<type>[^)]+)\)\s*$"
 )
 
 
 def parse_lookupsid(text: str) -> dict[int, dict[str, str]]:
-    """Parse output of impacket-lookupsid: `S-1-5-21-... 1000 DOMAIN\\name (type)`."""
+    """Parse output of impacket-lookupsid: `500: DOMAIN\\name (type)` lines."""
     out: dict[int, dict[str, str]] = {}
     for line in text.splitlines():
         match = _RID_LINE.search(line)
