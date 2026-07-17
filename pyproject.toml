@@ -37,6 +37,9 @@ dependencies = [
     "impacket>=0.12.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
 [project.scripts]
 adenum = "adenum_lib.cli:main"
 
@@ -49,3 +52,6 @@ Documentation = "https://github.com/nodirsafarov/adenum#readme"
 [tool.setuptools.packages.find]
 include = ["adenum_lib*"]
 exclude = ["loot*", "tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
